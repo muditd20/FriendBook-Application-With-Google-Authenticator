@@ -5,7 +5,8 @@ import com.friendbook.dto.LoginRequest;
 import com.friendbook.dto.RegisterRequest;
 import com.friendbook.model.User;
 import com.friendbook.service.UserService;
-
+import com.friendbook.service.TotpService;
+import dev.samstevens.totp.exceptions.QrGenerationException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
@@ -24,6 +25,9 @@ public class AuthController {
 
 	@Autowired
 	private UserService userService;
+
+	@Autowired
+	private TotpService totpService;
 
 	@Autowired
 	private CaptchaValidator captchaValidator;
@@ -76,10 +80,17 @@ public class AuthController {
 		try {
 			User user = userService.login(request);
 
-			session.setAttribute("loggedInUser", user.getEmail());
+			session.setAttribute("pending2FAUser", user.getEmail());
 
-			String encodedEmail = URLEncoder.encode(user.getEmail(), StandardCharsets.UTF_8);
-			return "redirect:/user/dashboard?email=" + encodedEmail;
+			if (user.isUsing2FA()) {
+				return "redirect:/auth/verify-2fa";
+			} else {
+				if (user.getTotpSecret() == null) {
+					user.setTotpSecret(totpService.generateSecret());
+					userService.save(user);
+				}
+				return "redirect:/auth/setup-2fa";
+			}
 
 		} catch (RuntimeException ex) {
 			model.addAttribute("loginError", ex.getMessage());
@@ -100,6 +111,67 @@ public class AuthController {
 		}
 		return "redirect:/auth/login";
 
+	}
+
+	@GetMapping("/setup-2fa")
+	public String setup2fa(HttpSession session, Model model) {
+		String email = (String) session.getAttribute("pending2FAUser");
+		if (email == null) return "redirect:/auth/login";
+
+		User user = userService.findByEmail(email);
+		try {
+			String qrCodeImage = totpService.getQrCodeImageUri(user.getTotpSecret(), user.getEmail());
+			model.addAttribute("qrCodeImage", qrCodeImage);
+		} catch (QrGenerationException e) {
+			model.addAttribute("error", "Error generating QR code");
+		}
+		return "setup-2fa";
+	}
+
+	@PostMapping("/setup-2fa")
+	public String confirm2faSetup(@RequestParam("code") String code, HttpSession session, Model model) {
+		String email = (String) session.getAttribute("pending2FAUser");
+		if (email == null) return "redirect:/auth/login";
+
+		User user = userService.findByEmail(email);
+		if (totpService.verifyCode(user.getTotpSecret(), code)) {
+			user.setUsing2FA(true);
+			userService.save(user);
+			session.removeAttribute("pending2FAUser");
+			session.setAttribute("loggedInUser", user.getEmail());
+			String encodedEmail = URLEncoder.encode(user.getEmail(), StandardCharsets.UTF_8);
+			return "redirect:/user/dashboard?email=" + encodedEmail;
+		}
+
+		model.addAttribute("error", "Invalid code. Please try again.");
+		try {
+			model.addAttribute("qrCodeImage", totpService.getQrCodeImageUri(user.getTotpSecret(), user.getEmail()));
+		} catch (QrGenerationException ignored) {}
+		return "setup-2fa";
+	}
+
+	@GetMapping("/verify-2fa")
+	public String verify2faForm(HttpSession session) {
+		String email = (String) session.getAttribute("pending2FAUser");
+		if (email == null) return "redirect:/auth/login";
+		return "verify-2fa";
+	}
+
+	@PostMapping("/verify-2fa")
+	public String verify2faSubmit(@RequestParam("code") String code, HttpSession session, Model model) {
+		String email = (String) session.getAttribute("pending2FAUser");
+		if (email == null) return "redirect:/auth/login";
+
+		User user = userService.findByEmail(email);
+		if (totpService.verifyCode(user.getTotpSecret(), code)) {
+			session.removeAttribute("pending2FAUser");
+			session.setAttribute("loggedInUser", user.getEmail());
+			String encodedEmail = URLEncoder.encode(user.getEmail(), StandardCharsets.UTF_8);
+			return "redirect:/user/dashboard?email=" + encodedEmail;
+		}
+		
+		model.addAttribute("error", "Invalid code. Please try again.");
+		return "verify-2fa";
 	}
 
 }

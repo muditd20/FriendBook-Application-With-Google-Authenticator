@@ -27,13 +27,13 @@ public class SecurityConfig {
 		daoAuthenticationProvider.setUserDetailsService(this.getUserDetailsService());
 		daoAuthenticationProvider.setPasswordEncoder(passwordEncoder());
 		return daoAuthenticationProvider;
-	}
+	}	
 
 	@Bean
 	public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 		http.csrf(csrf -> csrf.disable()).authorizeHttpRequests(auth -> auth
 				.requestMatchers("/", "/index", "/css/**", "/js/**", "/images/**", "/uploads/**", "/auth/**",
-						"/h2-console/**")
+						"/auth/setup-2fa", "/auth/verify-2fa", "/h2-console/**")
 				.permitAll()
 
 				.requestMatchers("/user/**", "/posts/**", "/likes/**", "/comments/**", "/notifications/**").permitAll()

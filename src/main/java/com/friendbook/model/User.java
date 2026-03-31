@@ -19,6 +19,11 @@ public class User {
 
 	private String profilePhoto;
 
+	private String totpSecret;
+
+	@Column(name = "using_2fa", nullable = false, columnDefinition = "boolean default false")
+	private boolean using2FA;
+
 	@Transient
 	private boolean alreadyFollowing;
 
@@ -112,6 +117,22 @@ public class User {
 
 	public void setRequested(boolean requested) {
 		this.requested = requested;
+	}
+
+	public String getTotpSecret() {
+		return totpSecret;
+	}
+
+	public void setTotpSecret(String totpSecret) {
+		this.totpSecret = totpSecret;
+	}
+
+	public boolean isUsing2FA() {
+		return using2FA;
+	}
+
+	public void setUsing2FA(boolean using2FA) {
+		this.using2FA = using2FA;
 	}
 
 }
