@@ -62,10 +62,15 @@ public class AuthController {
 	}
 
 	@GetMapping("/login")
-	public String loginForm(Model model, @RequestParam(value = "registered", required = false) String registered) {
+	public String loginForm(Model model, 
+			@RequestParam(value = "registered", required = false) String registered,
+			@RequestParam(value = "enrolled", required = false) String enrolled) {
 		model.addAttribute("loginRequest", new LoginRequest());
 		if (registered != null) {
 			model.addAttribute("message", "Registration successful. Please login.");
+		}
+		if (enrolled != null) {
+			model.addAttribute("message", "User enrolled for Google Authenticator. Please login again.");
 		}
 		return "login";
 	}
@@ -138,9 +143,7 @@ public class AuthController {
 			user.setUsing2FA(true);
 			userService.save(user);
 			session.removeAttribute("pending2FAUser");
-			session.setAttribute("loggedInUser", user.getEmail());
-			String encodedEmail = URLEncoder.encode(user.getEmail(), StandardCharsets.UTF_8);
-			return "redirect:/user/dashboard?email=" + encodedEmail;
+			return "redirect:/auth/login?enrolled=true";
 		}
 
 		model.addAttribute("error", "Invalid code. Please try again.");
